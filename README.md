@@ -2,7 +2,7 @@
 
 ## Test Overview
 
-50-minute live coding test on the VPS. Closed notes, no browser, no AI.
+50-minute live coding test on the VPS. **Open notes, open internet, AI allowed** — but every line you submit must be yours to explain.
 
 1. **Load & Clean** `threats_raw.csv` with an audit trail (`clean_threats.py`) — 20 pts
 2. **Chart 1**: Daily timeline of phishing reports + failed logins (`project_charts.py`) — 10 pts
