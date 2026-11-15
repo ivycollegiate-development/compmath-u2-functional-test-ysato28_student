@@ -1,7 +1,8 @@
 """Task 1 — load and clean threats_raw.csv with an audit trail.
 
 Starter file. The plumbing is done for you; the judgements are not.
-Fill in the four functions marked TODO. Nothing else needs to change.
+Fill in the four functions marked TODO. You may add an import if you want one
+(`io` is allowed); the rest does not need to change.
 
 Read the packet (§4.1) next to this file. The order of the nine steps is part
 of the task — several of them break if you reorder them.
@@ -46,15 +47,18 @@ REASONS = ("blank", "unparseable", "impossible")
 
 
 # ---------------------------------------------------------------------------
-# TODO 1 — step 2: strip the comment lines before the CSV parser sees them
+# TODO 1 — steps 1 and 2: open the file, then strip the comment lines
 # ---------------------------------------------------------------------------
 def read_data_lines(path):
     """Return the file's lines with blank lines and '#' comments removed.
 
+    Open it with open(path, newline="") — packet step 1. The newline argument is
+    the documented way to hand a file to the csv module.
+
     Must strip whitespace before testing, so an indented "  # comment" is
     still treated as a comment.
     """
-    raise NotImplementedError("TODO 1: implement read_data_lines() — packet §4.1 step 2")
+    raise NotImplementedError("TODO 1: implement read_data_lines() — packet §4.1 steps 1-2")
 
 
 # ---------------------------------------------------------------------------
@@ -65,12 +69,15 @@ def parse_rows(lines):
 
     Return a list of row dicts. Raise ValueError (with the actual header in
     the message) if the header is not exactly HEADER, in that order.
+
+    DictReader accepts any iterable of lines, so the list from TODO 1 works
+    directly — no temporary file needed. (io.StringIO is also allowed.)
     """
     raise NotImplementedError("TODO 2: implement parse_rows() — packet §4.1 steps 3-4")
 
 
 # ---------------------------------------------------------------------------
-# TODO 3 — steps 5 to 7: clean one row, in a fixed order
+# TODO 3 — steps 6 and 7: clean one row, in a fixed order (step 5 is BOUNDS above)
 # ---------------------------------------------------------------------------
 def clean_row(row, drops):
     """Return the row with numeric values, or None if it must be dropped.
@@ -82,19 +89,27 @@ def clean_row(row, drops):
     On a pass, replace the string with its numeric value.
 
     Print each drop as it happens:
-        Dropped row: blank phishing_reports
-    and increment drops[reason_category] once per dropped row.
+        Dropped row: blank <column>
+    and increment `drops` once per dropped row, keyed by the category word alone
+    ('blank', 'unparseable', 'impossible') — not the full reason string.
 
-    `drops` is {"blank": 0, "unparseable": 0, "impossible": 0}.
+    `drops` is {"blank": 0, "unparseable": 0, "impossible": 0}. Mutate it; do
+    not reassign it.
+
+    Return the same dict, modified, with `date` unchanged. Falling off the end
+    of the function returns None, and main() treats None as a drop.
     """
-    raise NotImplementedError("TODO 3: implement clean_row() — packet §4.1 steps 5-7")
+    raise NotImplementedError("TODO 3: implement clean_row() — packet §4.1 steps 6-7")
 
 
 # ---------------------------------------------------------------------------
 # TODO 4 — step 9 (write half): emit threats_clean.csv
 # ---------------------------------------------------------------------------
 def write_clean(path, rows):
-    """Write HEADER then one line per row, using csv.writer and this order."""
+    """Write HEADER then one line per row, using csv.writer and this order.
+
+    Open the output with newline="" as well, or csv's line endings double up.
+    """
     raise NotImplementedError("TODO 4: implement write_clean() — packet §4.1 step 9")
 
 
@@ -114,6 +129,12 @@ def main():
         if cleaned is None:
             continue
         kept.append(cleaned)
+
+    assert set(drops) == set(REASONS), (
+        "Unknown drop category in {} — key `drops` by the category word only".format(
+            sorted(drops)
+        )
+    )
 
     rows_out = len(kept)
     rows_dropped = rows_in - rows_out
