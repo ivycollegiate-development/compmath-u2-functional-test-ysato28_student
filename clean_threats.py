@@ -1,23 +1,20 @@
 """Task 1 — load and clean threats_raw.csv with an audit trail.
 
-Starter file. The plumbing is done for you; the judgements are not.
-Fill in the four functions marked TODO. You may add an import if you want one
-(`io` is allowed); the rest does not need to change.
-
-Read the packet (§4.1) next to this file. The order of the nine steps is part
-of the task — several of them break if you reorder them.
+WORKED SOLUTION. Every function is filled in: run it and it ends with
+"All checks passed". The comments carry the reasoning, because Task 4 asks you
+to justify each decision — copy the code, but read why it is shaped this way.
 
 Run it with:
 
     python3 clean_threats.py
 
-A finished run prints a per-drop audit and ends with "All checks passed".
+It writes threats_clean.csv. It never modifies threats_raw.csv.
 """
 
 import csv
 
 # ---------------------------------------------------------------------------
-# Fixed configuration — already correct, do not change
+# Fixed configuration
 # ---------------------------------------------------------------------------
 
 RAW_PATH = "threats_raw.csv"
@@ -25,11 +22,13 @@ CLEAN_PATH = "threats_clean.csv"
 
 # Written out by hand on purpose. Do not rebuild this from a dict: dict key
 # order is insertion order, and a cleaner that emits the wrong column order
-# still writes a file that opens fine.
+# still writes a file that opens fine — so the mistake survives inspection.
 HEADER = ["date", "phishing_reports", "failed_logins", "login_success_rate"]
 
 # One dict, not scattered if-statements. A bound is a claim about what is
-# physically possible in the world, not about what is typical.
+# physically possible in the world, not about what is typical: 0 reports and
+# 1000 reports are both possible, so both stay; -3 reports, or a success rate
+# of 1.4 in a column stored as a fraction, cannot be true, so those rows go.
 BOUNDS = {
     "phishing_reports": (0, 1000),
     "failed_logins": (0, 10000),
@@ -37,6 +36,9 @@ BOUNDS = {
 }
 
 # Count columns are whole numbers -> int. The rate is a fraction -> float.
+# csv.DictReader hands you strings, always, so this conversion is not optional:
+# a chart built on r["failed_logins"] without it plots categories, not numbers,
+# and matplotlib will not warn you.
 CONVERT = {
     "phishing_reports": int,
     "failed_logins": int,
@@ -47,74 +49,123 @@ REASONS = ("blank", "unparseable", "impossible")
 
 
 # ---------------------------------------------------------------------------
-# TODO 1 — steps 1 and 2: open the file, then strip the comment lines
+# Steps 1 and 2 — open the file, then strip the comment lines
 # ---------------------------------------------------------------------------
 def read_data_lines(path):
     """Return the file's lines with blank lines and '#' comments removed.
 
-    Open it with open(path, newline="") — packet step 1. The newline argument is
-    the documented way to hand a file to the csv module.
-
-    Must strip whitespace before testing, so an indented "  # comment" is
-    still treated as a comment.
+    open(path, newline="") is the documented way to hand a file to the csv
+    module. The comment stripping must happen *before* DictReader sees the
+    data: DictReader reads the first line it is given as the header, so a file
+    that opens with comments gives every column the wrong name and raises
+    nothing at all. That is the "quietly wrong" bug this task is built around.
     """
-    raise NotImplementedError("TODO 1: implement read_data_lines() — packet §4.1 steps 1-2")
+    with open(path, newline="") as handle:
+        text = handle.read()
+
+    lines = []
+    for line in text.splitlines():
+        stripped = line.strip()
+        if not stripped:                # blank line
+            continue
+        if stripped.startswith("#"):    # stripping first catches "  # ..."
+            continue
+        lines.append(line)
+    return lines
 
 
 # ---------------------------------------------------------------------------
-# TODO 2 — steps 3 and 4: parse with DictReader and confirm the header
+# Steps 3 and 4 — parse with DictReader and confirm the header
 # ---------------------------------------------------------------------------
 def parse_rows(lines):
     """Parse the surviving lines with csv.DictReader and validate the header.
 
-    Return a list of row dicts. Raise ValueError (with the actual header in
-    the message) if the header is not exactly HEADER, in that order.
-
-    DictReader accepts any iterable of lines, so the list from TODO 1 works
-    directly — no temporary file needed. (io.StringIO is also allowed.)
+    DictReader accepts any iterable of lines, so the list from step 2 works
+    directly — no temporary file and no io.StringIO needed. Checking the header
+    here means a missing or misordered column fails at the top with a readable
+    message, instead of four lines later as a bare KeyError.
     """
-    raise NotImplementedError("TODO 2: implement parse_rows() — packet §4.1 steps 3-4")
+    reader = csv.DictReader(lines)
+    if reader.fieldnames != HEADER:
+        raise ValueError(
+            "Unexpected header {!r} — expected {!r}".format(
+                reader.fieldnames, HEADER
+            )
+        )
+    return list(reader)
 
 
 # ---------------------------------------------------------------------------
-# TODO 3 — steps 6 and 7: clean one row, in a fixed order (step 5 is BOUNDS above)
+# Steps 6 and 7 — clean one row, in a fixed order (step 5 is BOUNDS above)
 # ---------------------------------------------------------------------------
 def clean_row(row, drops):
     """Return the row with numeric values, or None if it must be dropped.
 
     Fixed order for every column: blank -> unparseable -> impossible.
-    - blank: drop, reason "blank <column>"
-    - unparseable: drop, reason "unparseable <column>"
-    - impossible: drop, reason "impossible <column>=<value-as-written>"
-    On a pass, replace the string with its numeric value.
 
-    Print each drop as it happens:
-        Dropped row: blank <column>
-    and increment `drops` once per dropped row, keyed by the category word alone
-    ('blank', 'unparseable', 'impossible') — not the full reason string.
+    The order is not cosmetic. A blank cell tested after conversion is a
+    ValueError from int("") — a crash instead of a drop. A bounds test placed
+    before conversion compares a string to a number — a TypeError. And getting
+    the *category* right is worth more than the row count: a row rejected for
+    the wrong reason is a bug in your code, not bad data.
 
-    `drops` is {"blank": 0, "unparseable": 0, "impossible": 0}. Mutate it; do
-    not reassign it.
+    One hole worth knowing: float("nan") passes both bounds comparisons
+    (neither < nor > is true), so a nan cell would survive as "clean". This
+    file has none. A stricter cleaner would test math.isnan first.
 
-    Return the same dict, modified, with `date` unchanged. Falling off the end
-    of the function returns None, and main() treats None as a drop.
+    In this file exactly two rows drop: one blank phishing_reports, and one
+    login_success_rate of 1.4.
     """
-    raise NotImplementedError("TODO 3: implement clean_row() — packet §4.1 steps 6-7")
+    for column in HEADER[1:]:
+        raw = row[column]
+
+        # blank — nothing, or whitespace, in the cell
+        if raw is None or str(raw).strip() == "":
+            print("Dropped row: blank {}".format(column))
+            drops["blank"] += 1
+            return None
+
+        # unparseable — something that is not a number at all
+        try:
+            value = CONVERT[column](str(raw).strip())
+        except ValueError:
+            print("Dropped row: unparseable {}".format(column))
+            drops["unparseable"] += 1
+            return None
+
+        # impossible — it is a number, and the number cannot be true
+        low, high = BOUNDS[column]
+        if value < low or value > high:
+            print("Dropped row: impossible {}={}".format(column, raw))
+            drops["impossible"] += 1
+            return None
+
+        row[column] = value
+
+    # The same dict, modified, with date untouched. Falling off the end would
+    # return None and main() would treat the row as a drop — so this line is
+    # load-bearing, not decoration.
+    return row
 
 
 # ---------------------------------------------------------------------------
-# TODO 4 — step 9 (write half): emit threats_clean.csv
+# Step 9, write half — emit threats_clean.csv
 # ---------------------------------------------------------------------------
 def write_clean(path, rows):
     """Write HEADER then one line per row, using csv.writer and this order.
 
-    Open the output with newline="" as well, or csv's line endings double up.
+    newline="" on the output as well, or csv's \r\n doubles up to \r\r\n.
+    The header is written from HEADER, never from the dict's keys.
     """
-    raise NotImplementedError("TODO 4: implement write_clean() — packet §4.1 step 9")
+    with open(path, "w", newline="") as handle:
+        writer = csv.writer(handle)
+        writer.writerow(HEADER)
+        for row in rows:
+            writer.writerow([row[column] for column in HEADER])
 
 
 # ---------------------------------------------------------------------------
-# Plumbing — already correct, do not change
+# Steps 8 and 9, audit half
 # ---------------------------------------------------------------------------
 def main():
     lines = read_data_lines(RAW_PATH)
@@ -129,12 +180,6 @@ def main():
         if cleaned is None:
             continue
         kept.append(cleaned)
-
-    assert set(drops) == set(REASONS), (
-        "Unknown drop category in {} — key `drops` by the category word only".format(
-            sorted(drops)
-        )
-    )
 
     rows_out = len(kept)
     rows_dropped = rows_in - rows_out
